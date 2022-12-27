@@ -1,0 +1,96 @@
+name: deploy
+
+on:
+  workflow_call:
+
+
+# on:                                  
+#   push:
+#     tags:
+#       - dev-*   
+#       - stg-*                         
+#       - prod-*
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+
+    - name: Cache node modules
+      id: cache-nodemodules
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-node-modules
+      with:
+        # caching node_modules
+        path: node_modules
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '12.x'
+
+    # Deploy the Docker image to the GKE cluster
+    - name: Deploy
+      run: |
+        export ENV=development
+        if echo "$GITHUB_REF_NAME" | grep -q "^dev-.*";  then export ENV=development; fi
+        if echo "$GITHUB_REF_NAME" | grep -q "^stg-.*";  then export ENV=staging; fi
+        if echo "$GITHUB_REF_NAME" | grep -q "^prod-.*"; then export ENV=production; fi
+        export APP_NAME=${GITHUB_REPOSITORY#*/}
+        
+        echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
+        echo "ENV=${ENV}" >> $GITHUB_ENV
+
+    - run: npm install
+    - run: npm run build --if-present
+    - run: cd dist && tar -acf ../${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz .
+    
+    - name: deploy file
+      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+      with:
+          username: '${{ secrets.SSH_USER }}'
+          server: '${{ secrets.SSH_HOST }}'
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }} 
+          local_path: "./${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz"
+          remote_path: '/tmp'
+          sftpArgs: '-o ConnectTimeout=5'
+
+    - name: executing remote ssh commands using password
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: sudo /usr/local/sbin/apache-app-deploy -n ${{ env.APP_NAME }} -f /tmp/${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz
+
+        
+    # - name: Microsoft Teams Webhook Notifications
+    #   uses: dhollerbach/actions.send-message-to-ms-teams@1.0.10
+    #   with:
+    #     webhook: 'https://epinesdorsales.webhook.office.com/webhookb2/d60f3a54-5eaf-49bb-8dfd-472620699284@977eb610-1e89-4206-926d-0b901daae76f/IncomingWebhook/94cc4693852241218304d151b2093450/b5932256-a416-4085-8605-ca4aa1510ba6'
+    #     message: |
+    #       ${{ github.actor }} created commit:
+    #       Commit message: ${{ github.event.commits[0].message }}
+    #       Repository: ${{ github.repository }}
+    #       See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
+          
+    #       ${{ env.APP_NAME }}-${{ env.ENV }} deployed !
+          
+    # - name: send telegram message on push
+    #   uses: appleboy/telegram-action@master
+    #   with:
+    #     to: ${{ secrets.TELEGRAM_TO }}
+    #     token: ${{ secrets.TELEGRAM_TOKEN }}
+    #     message: |
+    #       ${{ github.actor }} created commit:
+    #       Commit message: ${{ github.event.commits[0].message }}
+    #       Repository: ${{ github.repository }}
+    #       See changes: https://github.com/${{ github.repository }}/commit/${{github.sha}}
+          
+    #       ${{ env.APP_NAME }}-${{ env.ENV }} deployed !
