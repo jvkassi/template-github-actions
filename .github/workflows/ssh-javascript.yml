@@ -28,11 +28,6 @@ jobs:
         # caching node_modules
         path: node_modules
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
-        
-    - name: Use Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '12.x'
 
     # Deploy the Docker image to the GKE cluster
     - name: Deploy
@@ -41,11 +36,18 @@ jobs:
         if echo "$GITHUB_REF_NAME" | grep -q "^dev-.*";  then export ENV=development; fi
         if echo "$GITHUB_REF_NAME" | grep -q "^stg-.*";  then export ENV=staging; fi
         if echo "$GITHUB_REF_NAME" | grep -q "^prod-.*"; then export ENV=production; fi
+        
         export APP_NAME=${GITHUB_REPOSITORY#*/}
         
         echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
         echo "ENV=${ENV}" >> $GITHUB_ENV
 
+        
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '${{ secrets.NODE_VERSION }}'
+        
     - run: npm install
     - run: npm run build --if-present
     - run: cd dist && tar -acf ../${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz .
