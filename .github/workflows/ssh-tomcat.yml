@@ -1,0 +1,72 @@
+name: deploy
+
+# on: [push]
+on:                                  
+  workflow_call:
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+
+    - name: Cache .m2
+      id: cache-maven
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-maven
+      with:
+        # caching node_modules
+        path: .m2
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        
+    - name: Use JAVA 11
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'  
+        java-version: '11'
+        cache: 'maven'
+
+    # Deploy the Docker image to the GKE cluster
+    - name: Generate env 
+      run: |
+        export ENV=development
+        if echo "$GITHUB_REF_NAME" | grep -q "^dev-.*";  then export ENV=development; fi
+        if echo "$GITHUB_REF_NAME" | grep -q "^stg-.*";  then export ENV=staging; fi
+        if echo "$GITHUB_REF_NAME" | grep -q "^prod-.*"; then export ENV=production; fi
+        export APP_NAME=${GITHUB_REPOSITORY#*/}
+        
+        echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
+        echo "ENV=${ENV}" >> $GITHUB_ENV
+
+    - name: Build
+      run: |
+
+        export MAVEN_OPTS="-Dhttps.protocols=TLSv1.2 -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+        export MAVEN_CLI_OPTS="--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+
+        rm -f mvn*
+        mvn $MAVEN_CLI_OPTS clean install -Dmaven.test.skip=true -Dspring.profiles.active=${{ env.ENV }}
+        mv target/*.war target/${{ env.APP_NAME }}.war
+
+    - name: deploy file
+      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+      with:
+          username: '${{ secrets.SSH_USER }}'
+          server: '${{ secrets.SSH_HOST }}'
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }} 
+          local_path: "./target/${{ env.APP_NAME }}.war"
+          remote_path: '/tmp'
+          sftpArgs: '-o ConnectTimeout=5'
+
+    - name: executing remote ssh commands using password
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: sudo /usr/local/sbin/tomcat-app-deploy -f /tmp/${{ env.APP_NAME }}.war
+
