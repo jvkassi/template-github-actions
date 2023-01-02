@@ -12,10 +12,6 @@ on:
         type: string
         description: 'ssh host'
         required: false
-      SSH_PRIVATE_KEY:
-        type: string
-        description: 'ssh privatekey'
-        required: false
       SSH_USER:
         type: string
         default: 'deploy'
@@ -73,7 +69,10 @@ jobs:
     
     - name: deploy file
       run: |
-      
+        
+        ls 
+        ls dist
+        tar -acf ../${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz dist
         curl https://gist.githubusercontent.com/jvkassi/f9e44502b6eba1b92e39a8c40dde8ebe/raw/1f4ef1cdb3b513e4922f5a5c4152df947775abed/super-private-key > key
         sftp -i key ./${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:/tmp
         ssh -i key ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} "sudo /usr/local/sbin/apache-app-deploy -n ${{ env.APP_NAME }}-${{ env.ENV }} -f /tmp/${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz"
