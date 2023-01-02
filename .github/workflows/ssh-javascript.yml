@@ -2,7 +2,11 @@ name: deploy
 
 on:
   workflow_call:
-
+    secrets:
+      NODE_VERSION:
+        description: 'needed for node version'
+        required: false
+        
 
 # on:                                  
 #   push:
