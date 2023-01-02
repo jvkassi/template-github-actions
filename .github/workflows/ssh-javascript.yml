@@ -2,16 +2,23 @@ name: deploy
 
 on:
   workflow_call:
-    secrets:
+    inputs:
       NODE_VERSION:
+        type: string
         description: 'needed for node version'
         required: false
+        default: 16
       SSH_HOST:
+        type: string
         description: 'ssh host'
         required: false
       SSH_PRIVATE_KEY:
+        type: string
         description: 'ssh privatekey'
         required: false
+      SSH_USER:
+        type: string
+        default: 'deploy'
   
 
 # on:                                  
@@ -48,7 +55,7 @@ jobs:
         if echo "$GITHUB_REF_NAME" | grep -q "^prod-.*"; then export ENV=production; fi
         
         export APP_NAME=${GITHUB_REPOSITORY#*/}
-        echo Using node version ${{ secrets.NODE_VERSION }}
+        echo Using node version ${{ inputs.NODE_VERSION }}
         echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
         echo "ENV=${ENV}" >> $GITHUB_ENV
 
@@ -56,7 +63,7 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '${{ secrets.NODE_VERSION }}'
+        node-version: '${{ inputs.NODE_VERSION }}'
         
     - run: npm install
     - run: npm run build --if-present
@@ -65,9 +72,9 @@ jobs:
     - name: deploy file
       uses: wlixcc/SFTP-Deploy-Action@v1.2.4
       with:
-          username: '${{ secrets.SSH_USER }}'
-          server: '${{ secrets.SSH_HOST }}'
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }} 
+          username: '${{ inputs.SSH_USER }}'
+          server: '${{ inputs.SSH_HOST }}'
+          ssh_private_key: ${{ inputs.SSH_PRIVATE_KEY }} 
           local_path: "./${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz"
           remote_path: '/tmp'
           sftpArgs: '-o ConnectTimeout=5'
@@ -75,9 +82,9 @@ jobs:
     - name: executing remote ssh commands using password
       uses: appleboy/ssh-action@master
       with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        host: ${{ inputs.SSH_HOST }}
+        username: ${{ inputs.SSH_USER }}
+        key: ${{ inputs.SSH_PRIVATE_KEY }}
         port: 22
         script: sudo /usr/local/sbin/apache-app-deploy -n ${{ env.APP_NAME }} -f /tmp/${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz
 
