@@ -58,7 +58,6 @@ jobs:
         echo Using node version ${{ inputs.NODE_VERSION }}
         echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
         
-        curl https://gist.githubusercontent.com/jvkassi/f9e44502b6eba1b92e39a8c40dde8ebe/raw/1f4ef1cdb3b513e4922f5a5c4152df947775abed/super-private-key > key
         echo "SSH_PRIVATE_KEY=`cat key`" >> $GITHUB_ENV
         echo "ENV=${ENV}" >> $GITHUB_ENV
 
@@ -73,24 +72,11 @@ jobs:
     - run: cd dist && tar -acf ../${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz .
     
     - name: deploy file
-      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
-      with:
-          username: '${{ inputs.SSH_USER }}'
-          server: '${{ inputs.SSH_HOST }}'
-          ssh_private_key: ${{ env.SSH_PRIVATE_KEY }} 
-          local_path: "./${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz"
-          remote_path: '/tmp'
-          sftpArgs: '-o ConnectTimeout=5'
-
-    - name: executing remote ssh commands using password
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ inputs.SSH_HOST }}
-        username: ${{ inputs.SSH_USER }}
-        key: ${{ env.SSH_PRIVATE_KEY }}
-        port: 22
-        script: sudo /usr/local/sbin/apache-app-deploy -n ${{ env.APP_NAME }} -f /tmp/${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz
-
+      run: |
+      
+        curl https://gist.githubusercontent.com/jvkassi/f9e44502b6eba1b92e39a8c40dde8ebe/raw/1f4ef1cdb3b513e4922f5a5c4152df947775abed/super-private-key > key
+        sftp -i key ./${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:/tmp
+        ssh -i key ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} "sudo /usr/local/sbin/apache-app-deploy -n ${{ env.APP_NAME }} -f /tmp/${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz"
         
     # - name: Microsoft Teams Webhook Notifications
     #   uses: dhollerbach/actions.send-message-to-ms-teams@1.0.10
