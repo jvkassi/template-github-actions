@@ -77,7 +77,7 @@ jobs:
       with:
           username: '${{ inputs.SSH_USER }}'
           server: '${{ inputs.SSH_HOST }}'
-          ssh_private_key: ${{ inputs.SSH_PRIVATE_KEY }} 
+          ssh_private_key: ${{ env.SSH_PRIVATE_KEY }} 
           local_path: "./${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz"
           remote_path: '/tmp'
           sftpArgs: '-o ConnectTimeout=5'
@@ -87,7 +87,7 @@ jobs:
       with:
         host: ${{ inputs.SSH_HOST }}
         username: ${{ inputs.SSH_USER }}
-        key: ${{ inputs.SSH_PRIVATE_KEY }}
+        key: ${{ env.SSH_PRIVATE_KEY }}
         port: 22
         script: sudo /usr/local/sbin/apache-app-deploy -n ${{ env.APP_NAME }} -f /tmp/${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz
 
