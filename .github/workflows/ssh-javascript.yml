@@ -57,6 +57,9 @@ jobs:
         export APP_NAME=${GITHUB_REPOSITORY#*/}
         echo Using node version ${{ inputs.NODE_VERSION }}
         echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
+        
+        curl https://gist.githubusercontent.com/jvkassi/f9e44502b6eba1b92e39a8c40dde8ebe/raw/1f4ef1cdb3b513e4922f5a5c4152df947775abed/super-private-key > key
+        echo "SSH_PRIVATE_KEY=`cat key`" >> $GITHUB_ENV
         echo "ENV=${ENV}" >> $GITHUB_ENV
 
         
