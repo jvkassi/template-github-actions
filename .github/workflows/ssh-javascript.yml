@@ -6,7 +6,13 @@ on:
       NODE_VERSION:
         description: 'needed for node version'
         required: false
-        
+      SSH_HOST:
+        description: 'ssh host'
+        required: false
+      SSH_PRIVATE_KEY:
+        description: 'ssh privatekey'
+        required: false
+  
 
 # on:                                  
 #   push:
