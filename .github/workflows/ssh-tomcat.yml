@@ -1,8 +1,21 @@
 name: deploy
 
-# on: [push]
-on:                                  
+on:
   workflow_call:
+    inputs:
+      JAVA_VERSION:
+        type: string
+        description: 'needed for node version'
+        required: false
+        default: 11
+      SSH_HOST:
+        type: string
+        description: 'ssh host'
+        required: false
+      SSH_USER:
+        type: string
+        default: 'deploy'
+  
 
 jobs:
   setup-build-publish-deploy:
@@ -52,21 +65,12 @@ jobs:
         mv target/*.war target/${{ env.APP_NAME }}.war
 
     - name: deploy file
-      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
-      with:
-          username: '${{ secrets.SSH_USER }}'
-          server: '${{ secrets.SSH_HOST }}'
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }} 
-          local_path: "./target/${{ env.APP_NAME }}.war"
-          remote_path: '/tmp'
-          sftpArgs: '-o ConnectTimeout=5'
+      run: |
+        
+        curl https://gist.githubusercontent.com/jvkassi/f9e44502b6eba1b92e39a8c40dde8ebe/raw/1f4ef1cdb3b513e4922f5a5c4152df947775abed/super-private-key > key
+        chmod 0400 key
+        scp -i key -o "StrictHostKeyChecking no" ./${{ env.APP_NAME }}-${{ env.ENV }}.tar.gz ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:/tmp
+        ssh -i key -o "StrictHostKeyChecking no" ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} "/usr/local/sbin/tomcat-app-deploy -f /tmp/${{ env.APP_NAME }}.war"
 
-    - name: executing remote ssh commands using password
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: sudo /usr/local/sbin/tomcat-app-deploy -f /tmp/${{ env.APP_NAME }}.war
+  
 
