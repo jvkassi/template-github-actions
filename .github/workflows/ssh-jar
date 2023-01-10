@@ -1,0 +1,76 @@
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      JAVA_VERSION:
+        type: string
+        description: 'needed for node version'
+        required: false
+        default: 11
+      SSH_HOST:
+        type: string
+        description: 'ssh host'
+        required: false
+      SSH_USER:
+        type: string
+        default: 'deploy'
+  
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+
+    - name: Cache .m2
+      id: cache-maven
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-maven
+      with:
+        # caching node_modules
+        path: .m2
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+        
+    - name: Use JAVA
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'  
+        java-version: ' ${{ inputs.JAVA_VERSION }}'
+        cache: 'maven'
+
+    # Deploy the Docker image to the GKE cluster
+    - name: Generate env 
+      run: |
+        export ENV=development
+        if echo "$GITHUB_REF_NAME" | grep -q "^dev-.*";  then export ENV=development; fi
+        if echo "$GITHUB_REF_NAME" | grep -q "^stg-.*";  then export ENV=staging; fi
+        if echo "$GITHUB_REF_NAME" | grep -q "^prod-.*"; then export ENV=production; fi
+        export APP_NAME=${GITHUB_REPOSITORY#*/}
+        
+        echo "APP_NAME=${APP_NAME}" >> $GITHUB_ENV
+        echo "ENV=${ENV}" >> $GITHUB_ENV
+
+    - name: Build
+      run: |
+
+        export MAVEN_OPTS="-Dhttps.protocols=TLSv1.2 -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+        export MAVEN_CLI_OPTS="--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+
+        rm -f mvn*
+        mvn $MAVEN_CLI_OPTS clean install -Dmaven.test.skip=true -Dspring.profiles.active=${{ env.ENV }}
+        mv target/*.jar target/${{ env.APP_NAME }}.jar
+
+    - name: deploy file
+      run: |
+        
+        curl https://gist.githubusercontent.com/jvkassi/f9e44502b6eba1b92e39a8c40dde8ebe/raw/1f4ef1cdb3b513e4922f5a5c4152df947775abed/super-private-key > key
+        chmod 0400 key
+        scp -i key -o "StrictHostKeyChecking no" target/${{ env.APP_NAME }}.jar ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }}:/tmp
+        ssh -i key -o "StrictHostKeyChecking no" ${{ inputs.SSH_USER }}@${{ inputs.SSH_HOST }} "sudo /usr/local/sbin/jar-app-deploy -f /tmp/${{ env.APP_NAME }}.jar"
+
+  
+
